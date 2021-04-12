@@ -1,0 +1,101 @@
+### Part III
+<R>
+library(ggplot2)
+library(rms)
+library(Hmisc)
+library(pROC)
+library(PRROC)
+library(PredictABEL)
+library(ResourceSelection)
+
+### continuous
+ytest <- read.table("test_Y.txt")$V1
+PRS <- read.table("score_lasso.test.profile")$V1
+PRS <- scale(PRS)
+Etest <- read.table("test_E.txt")$V1
+Etest <- scale(Etest)
+plotdat <- data.frame(Y = scale(ytest),
+                      PRS = PRS,
+                      E = Etest)
+
+summary(lm(Y ~ PRS, data = plotdat))
+summary(lm(Y ~ PRS + E, data = plotdat))
+ggplot(plotdat, aes(x = PRS, y = Y)) + geom_point() + theme_classic() +
+  geom_abline(slope = 1, col = "red", lty = 2) +
+  geom_smooth(method = "lm",)
+
+### binary
+ztest <- read.table("test_Z.txt")$V1
+plotdat$Z <- ztest
+plotdat$Z <- ifelse(plotdat$Z, "case", "control")
+ggplot(plotdat, aes(x = PRS, color = as.factor(Z), fill = as.factor(Z))) + geom_density(alpha = 0.3) +
+  theme_bw() + labs(color = "", fill = "") +
+  scale_color_manual(values = c("red","darkblue")) +
+  scale_fill_manual(values = c("red","darkblue")) +
+  theme(axis.title = element_text(size = 15),
+        axis.text = element_text(size = 13)) +
+  ylab("Density")
+
+summary(plotdat$PRS[plotdat$Z=="case"])
+summary(plotdat$PRS[plotdat$Z=="control"])
+t.test(plotdat$PRS[plotdat$Z=="case"], plotdat$PRS[plotdat$Z=="control"])
+
+plotdat$Z <- ifelse(plotdat$Z == "case", 1, 0)
+plotdat$PRSdecile <- cut(plotdat$PRS, c(quantile(plotdat$PRS, probs = seq(0, 1, by = 0.05))))
+sumdat <- tapply(plotdat$Z, plotdat$PRSdecile, table)
+plotsumdat <- data.frame(PRSrange = seq(2.5,97.5,by = 5),
+  Prevalence = unlist(lapply(sumdat,function(x) x[2])) / unlist(lapply(sumdat,function(x) x[2] + x[1])))
+ggplot(plotsumdat, aes(x = PRSrange, y = Prevalence, color = Prevalence)) + geom_point(size = 3) +
+  ylim(0,0.5) + theme_classic() +
+  theme(axis.title = element_text(size = 15),
+        axis.text = element_text(size = 13),
+        legend.position = "none") +
+  xlab("PRS percentile") + scale_color_gradient2()
+
+summary(glm(Z ~ PRS, data = plotdat, family = "binomial"))
+## odds ratio per SD increase in PRS
+cbind(exp(coef(glm(Z ~ PRS, data = plotdat, family = "binomial"))),
+      exp(confint(glm(Z ~ PRS, data = plotdat, family = "binomial"))))
+
+hoslem_test <- hoslem.test(plotdat$Z, 
+            predict(glm(Z ~ PRS, data = plotdat, family = "binomial"), type = "response"),
+            g = 10)
+val.prob(predict(glm(Z ~ PRS, data = plotdat, family = "binomial"), type = "response"),
+         plotdat$Z)
+
+## AUROC
+PRS_AUROC <- roc.curve(plotdat$PRS[plotdat$Z == 1],
+          plotdat$PRS[plotdat$Z == 0], curve = T)
+plot(PRS_AUROC)
+E_AUROC <- roc.curve(plotdat$E[plotdat$Z == 1],
+                       plotdat$E[plotdat$Z == 0], curve = T)
+plot(E_AUROC)
+
+## AUPRC
+PRS_AUPRC <- pr.curve(plotdat$PRS[plotdat$Z == 1],
+                       plotdat$PRS[plotdat$Z == 0], curve = T)
+plot(PRS_AUPRC)
+E_AUPRC <- pr.curve(plotdat$E[plotdat$Z == 1],
+                     plotdat$E[plotdat$Z == 0], curve = T)
+plot(E_AUPRC)
+
+## NRI & IDI
+PRSrank <- rank(PRS) / length(PRS)
+Erank <- rank(Etest) / length(Etest)
+
+reclassification(plotdat, cOutcome = 4, predrisk1 = Erank, predrisk2 = PRSrank, cutoff = c(0,0.5,1))
+reclassification(plotdat, cOutcome = 4, predrisk1 = Erank, predrisk2 = PRSrank, cutoff = c(0,0.8,1))
+reclassification(plotdat, cOutcome = 4, predrisk1 = Erank, predrisk2 = PRSrank, cutoff = c(0,0.9,1))
+reclassification(plotdat, cOutcome = 4, predrisk1 = Erank, predrisk2 = PRSrank, cutoff = c(0,0.95,1))
+
+## survival
+Survival <- read.table("test_timetoevent.txt",header = T)
+plotdat$Age <- Survival$Age
+modsurv <- cph(Surv(Age, Z) ~ PRS, data = plotdat, x=T, y=T)
+cbind(exp(modsurv$coefficients),
+      exp(confint(modsurv)))
+
+rcorr.cens(x=predict(modsurv), S=plotdat$Z)
+
+survplot(modsurv, PRS = c(-3,-2,-1,0,1,2,3), xlab = "Years", xlim = c(0,90))
+

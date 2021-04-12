@@ -1,0 +1,39 @@
+### LDPred, pre-installed using "pip install ldpred==1.0.10"
+<command line>
+(1) coordinate data
+ldpred coord --gf 1000G_EUR_10kSNP_chr22 --ssf training_GWAS.sumstat.txt --N 5000 --out ldpred.training --eff_type LINREG --ssf-format CUSTOM --rs SNP --A1 effect_allele --A2 other_allele --pval P --eff beta --se StdErr --chr chromosome --pos position
+
+(2) generate LDPred SNP weights
+ldpred gibbs --cf ldpred.training --ldr 50 --ldf ldpred.training.ldf --out ldpred.weights
+
+(3) generate individual risk scores
+ldpred score --gf EUR_10kSNP_chr22.test --rf ldpred.weights --rf-format LDPRED --out score_ldpred.test --only-score
+
+# Evaluation
+# LDPred may not converge due to small number of markers, except for LDPred-inf which is a genomic BLUP model; However, convergence is unlikely an issue for whole-genome analysis.
+<R>
+ytest <- read.table("test_Y.txt")$V1
+
+LDpredinf <- read.table("score_ldpred.test_LDpred-inf.txt",header = T)
+summary(lm(ytest ~ LDpredinf$PRS))
+
+LDpredrho_1 <- read.table("score_ldpred.test_LDpred_p1.0000e+00.txt",header = T)
+summary(lm(ytest ~ LDpredrho_1$PRS))
+
+LDpredrho_0.3 <- read.table("score_ldpred.test_LDpred_p3.0000e-01.txt",header = T)
+summary(lm(ytest ~ LDpredrho_0.3$PRS))
+
+LDpredrho_0.1 <- read.table("score_ldpred.test_LDpred_p1.0000e-01.txt",header = T)
+summary(lm(ytest ~ LDpredrho_0.1$PRS))
+
+LDpredrho_0.03 <- read.table("score_ldpred.test_LDpred_p3.0000e-02.txt",header = T)
+summary(lm(ytest ~ LDpredrho_0.03$PRS))
+
+LDpredrho_0.01 <- read.table("score_ldpred.test_LDpred_p1.0000e-02.txt",header = T)
+summary(lm(ytest ~ LDpredrho_0.01$PRS))
+
+LDpredrho_0.003 <- read.table("score_ldpred.test_LDpred_p3.0000e-03.txt",header = T)
+summary(lm(ytest ~ LDpredrho_0.003$PRS))
+
+LDpredrho_0.001 <- read.table("score_ldpred.test_LDpred_p1.0000e-03.txt",header = T)
+summary(lm(ytest ~ LDpredrho_0.001$PRS))

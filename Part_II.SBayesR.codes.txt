@@ -1,0 +1,15 @@
+### SBayesR
+<command line>
+cut -f 1,2 -d " " EUR_10kSNP_chr22.training.fam > tmp; paste -d " " tmp training_Y.txt > training_Y.pheno; rm tmp
+./gctb_2.03beta_Linux/gctb --bfile EUR_10kSNP_chr22.training --pheno training_Y.pheno --bayes S --chain-length 25000 --burn-in 5000 --out score_sbayesr.training > score_sbayesr.training.log 2>&1
+
+<R>
+load("EUR_10kSNP_chr22.raw.RData")
+
+ytrain <- read.table("training_Y.txt")$V1
+ysel <- read.table("modelselection_Y.txt")$V1
+ytest <- read.table("test_Y.txt")$V1
+
+posterior_effect <- read.table("score_sbayesr.training.snpRes",header = T)
+ytest_pred <- as.matrix(test_genotype) %*% posterior_effect$A1Effect
+summary(lm(ytest ~ ytest_pred))

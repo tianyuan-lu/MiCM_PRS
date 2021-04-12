@@ -1,0 +1,26 @@
+### PART I
+
+# tutorial - calculating a PRS using true beta (simulated) in summary statistics
+# this is for practice purpose only, as true SNP effect sizes are in no way available in a real study
+
+(1) Formatting scoring file
+<command line> cut -f 1,4,9 training_GWAS.sumstat.txt | sed 1d > score_true_beta.beta
+
+(2) Calculating scores
+<command line> ~/Applications/plink --bfile EUR_10kSNP_chr22.test --score score_true_beta.beta sum --out score_true_beta.test
+
+# exercise - calculating a PRS using GWAS beta estimates in summary statistics and compare performance (adjusted R^2)
+
+######
+<command line> cut -f 1,4,6 training_GWAS.sumstat.txt | sed 1d > score_gwas_beta.beta
+<command line> ~/Applications/plink --bfile EUR_10kSNP_chr22.test --score score_gwas_beta.beta sum --out score_gwas_beta.test
+
+<R>
+ytest <- read.table("test_Y.txt",header = F)$V1
+
+true_beta_score <- read.table("score_true_beta.test.profile",header = T)
+summary(lm(ytest ~ true_beta_score$SCORESUM))
+
+gwas_beta_score <- read.table("score_gwas_beta.test.profile",header = T)
+summary(lm(ytest ~ gwas_beta_score$SCORESUM))
+######

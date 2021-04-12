@@ -1,0 +1,59 @@
+### Part II
+
+# P + T using PRSice-2
+
+(1) automated training
+<command line> Rscript ~/Applications/PRSice/PRSice.R --prsice ~/Applications/PRSice/PRSice_mac --base training_GWAS.sumstat.txt --target EUR_10kSNP_chr22.training --thread 1 --stat beta --beta --binary-target F --A1 effect_allele --out score_prsice_automate.training --ld 1000G_EUR_10kSNP_chr22 --print-snp
+
+(2) evaluation on test set
+<R>
+load("EUR_10kSNP_chr22.raw.RData")
+
+ytrain <- read.table("training_Y.txt")$V1
+ysel <- read.table("modelselection_Y.txt")$V1
+ytest <- read.table("test_Y.txt")$V1
+
+sumstat <- read.table("training_GWAS.sumstat.txt",header = T)
+active_SNP <- read.table("score_prsice_automate.training.snp",header = T)
+
+prsice_beta <- sumstat$beta
+prsice_beta[!sumstat$SNP %in% active_SNP$SNP] <- 0
+
+ytest_pred <- as.matrix(test_genotype) %*% prsice_beta
+summary(lm(ytest ~ ytest_pred))
+
+# LASSO
+<R>
+library(glmnet)
+load("EUR_10kSNP_chr22.raw.RData")
+
+ytrain <- read.table("training_Y.txt")$V1
+ysel <- read.table("modelselection_Y.txt")$V1
+ytest <- read.table("test_Y.txt")$V1
+
+lassomod <- glmnet(as.matrix(training_genotype),ytrain)
+plot(lassomod)
+
+lassopred_train <- predict(lassomod, newx = as.matrix(training_genotype))
+adj_rsq_train <- apply(lassopred_train,2,function(x) summary(lm(ytrain ~ x))$adj.r.squared)
+plot(adj_rsq_train, xlab = "lambda index", ylab = "Adjusted Rsq in training set")
+
+lassopred_modelsel <- predict(lassomod, newx = as.matrix(modelselection_genotype))
+adj_rsq_modelsel <- apply(lassopred_modelsel,2,function(x) summary(lm(ysel ~ x))$adj.r.squared)
+plot(adj_rsq_modelsel, xlab = "lambda index", ylab = "Adjusted Rsq in model selection set")
+
+best_coefficient <- predict(lassomod, type = "coefficients")[-1,which.max(adj_rsq_modelsel)]
+table(best_coefficient != 0)
+
+ytest_pred <- as.matrix(test_genotype) %*% best_coefficient
+summary(lm(ytest ~ ytest_pred))
+
+write.table(ytest_pred, "score_lasso.test.profile", quote = F, col.names = F, row.names = F)
+
+# Alternative if no model selection set: 5-fold cross validation
+lassocvmod <- cv.glmnet(as.matrix(training_genotype),ytrain,nfolds = 5)
+plot(lassocvmod)
+
+ytest_pred_lassocv <- predict(lassocvmod, newx = as.matrix(test_genotype), s = "lambda.min")
+summary(lm(ytest ~ ytest_pred_lassocv))
+

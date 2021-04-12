@@ -1,0 +1,33 @@
+### LASSOSUM
+<R>
+devtools::install_github("tshmak/lassosum")
+
+library(lassosum)
+library(data.table)
+### Read summary statistics file ###
+ss <- fread("training_GWAS.sumstat.txt")
+head(ss)
+
+### Specify the PLINK file stub of the reference panel ###
+ref.bfile <- "1000G_EUR_10kSNP_chr22"
+
+### Specify the PLINK file stub of the training data ###
+train.bfile <- "EUR_10kSNP_chr22.modelselection"
+
+### Read LD region file ###
+LDblocks <- "EUR.hg19"
+
+cor <- p2cor(p = ss$P, n = 5000, sign=ss$beta)
+out <- lassosum.pipeline(cor=cor, chr=ss$chromosome, pos=ss$position, 
+                         A1=ss$effect_allele, A2=ss$other_allele, # A2 is not required but advised
+                         ref.bfile=ref.bfile, test.bfile=train.bfile, 
+                         LDblocks = LDblocks)
+v <- validate(out)
+
+### obtain best-performing model
+best_model <- subset(out, s=v$best.s, lambda=v$best.lambda)
+ytest_pred <- validate(best_model, test.bfile="EUR_10kSNP_chr22.test")$results.table$best.pgs
+
+### Evaluation
+ytest <- read.table("test_Y.txt")$V1
+summary(lm(ytest ~ ytest_pred))
